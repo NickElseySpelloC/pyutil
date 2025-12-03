@@ -62,6 +62,7 @@ else
 fi
 
 
+echo "Project:         $PROJECT_NAME"
 echo "Current version: $CURRENT_VERSION"
 echo "New version:     $VERSION"
 echo "Comment:         $COMMENT"
