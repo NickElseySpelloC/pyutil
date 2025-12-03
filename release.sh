@@ -18,6 +18,12 @@ else
     exit 1
 fi
 
+if [ -z "$CURRENT_VERSION" ]; then
+	echo "Error: version not defined in $PYPROJECT."
+	exit 1
+fi
+
+# Check arguments
 if [ "$#" -ne 2 ]; then
     echo "Usage: $0 <version> <comment>"
     exit 1

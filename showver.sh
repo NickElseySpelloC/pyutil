@@ -16,5 +16,10 @@ else
     exit 1
 fi
 
+if [ -z "$CURRENT_VERSION" ]; then
+	echo "Error: version not defined in $PYPROJECT."
+	exit 1
+fi
+
 echo "Project $PROJECT_NAME current version: $CURRENT_VERSION"
 exit 0

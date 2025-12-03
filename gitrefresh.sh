@@ -36,10 +36,17 @@ BLOCK_PATH_PATTERNS="${BLOCK_PATH_PATTERNS:-Development}"
 if [ -f "$PYPROJECT" ]; then
     CURRENT_VERSION=$(grep -E '^version *= *"' "$PYPROJECT" | head -1 | sed -E 's/^version *= *"([^"]+)".*$/\1/')
     PROJECT_NAME=$(grep -E '^name *= *"' "$PYPROJECT" | head -1 | sed -E 's/^name *= *"([^"]+)".*$/\1/')
+    SERVICE=$(grep -E '^service_name *= *"' "$PYPROJECT" | head -1 | sed -E 's/^service_name *= *"([^"]+)".*$/\1/')
 else
     echo "Error: $PYPROJECT not found."
     exit 1
 fi
+
+if [ -z "$CURRENT_VERSION" ]; then
+	echo "Error: version not defined in $PYPROJECT."
+	exit 1
+fi
+
 
 # 2. Ensure we are inside a git working tree
 if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
@@ -132,12 +139,31 @@ else
 fi
 
 echo "Project $PROJECT_NAME (v$CURRENT_VERSION): Starting refresh from branch '$BRANCH'"
+if [[ -n "$SERVICE" ]]; then
+  echo "The $SERVICE service will be stopped during this process."
+fi
 read -p "Enter Y to continue, any other key to abort: " CONFIRM
 
 if [[ "$CONFIRM" != "Y" && "$CONFIRM" != "y" ]]; then
     echo "Aborted."
     exit 0
 fi
+
+# If SERVICE is defined, stop it before refreshing
+if [[ -n "$SERVICE" ]]; then
+  echo "[Refresh] Stopping service '$SERVICE' before refresh..."
+  sudo systemctl stop "$SERVICE"
+
+  # Wait a moment to ensure service has stopped
+  sleep 3
+
+  # Ensure service is stopped
+  if systemctl is-active --quiet "$SERVICE"; then
+    echo "[Refresh] Error: Service '$SERVICE' is still running after stop command." >&2
+    exit 1
+  fi
+fi
+
 
 
 # Optional: ensure we're on the right branch
