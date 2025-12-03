@@ -5,7 +5,7 @@ Release
 Stages, commits and pushes a new release of the project to git.
 =========================================================='
 
-set -euo pipefail
+# set -euo pipefail
 
 PYPROJECT="pyproject.toml"
 

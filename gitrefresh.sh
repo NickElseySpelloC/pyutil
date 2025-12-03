@@ -5,7 +5,7 @@ Refresh from github
 Gets the latest version of this app from github. To only be used in deployed environments.
 =========================================================='
 
-set -euo pipefail
+# set -euo pipefail
 
 # --- Safety & Portability Guards -------------------------------------------
 # This script aims to be reusable across projects.
