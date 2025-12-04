@@ -1,6 +1,6 @@
 [project]
 name = "pyutil"
-version = "1.0.0"
-description = "Python automation scripts"
+version = "1.0.1"
+description = "Python automation scripts."
 readme = "README.md"
 dependencies = []
