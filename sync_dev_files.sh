@@ -74,8 +74,8 @@ parse_config() {
             # Parse remote
             if [[ "$line" =~ ^remote[[:space:]]*=[[:space:]]*\"(.*)\" ]]; then
                 remote="${BASH_REMATCH[1]}"
-            # Parse patterns (array format)
-            elif [[ "$line" =~ ^[[:space:]]*\"(.*)\"[[:space:]]*$ ]]; then
+            # Parse patterns (array format with optional commas)
+            elif [[ "$line" =~ ^[[:space:]]*\"(.*)\"[[:space:]]*,?[[:space:]]*$ ]]; then
                 pattern="${BASH_REMATCH[1]}"
                 patterns+=("$pattern")
             fi
