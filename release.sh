@@ -114,12 +114,14 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Tag the new release
-echo "Tagging release v$VERSION..."
-git tag "v$VERSION"
-if [ $? -ne 0 ]; then
-    echo "Error: git tag failed."
-    exit 1
+# Tag the new release only if version changed
+if [ "$VERSION" != "$CURRENT_VERSION" ]; then
+    echo "Tagging release v$VERSION..."
+    git tag "v$VERSION"
+    if [ $? -ne 0 ]; then
+        echo "Error: git tag failed."
+        exit 1
+    fi
 fi
 
 # Push to origin

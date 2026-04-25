@@ -86,15 +86,53 @@ uv init
 git init
 
 # Copy the default .gitignore file to the project directory
+echo "Copying default .gitignore file from $DEFAULT_GITIGNORE to $BASE_DIR/$project_name/.gitignore"
 cp "$DEFAULT_GITIGNORE" .gitignore
 
 # Create a .env file with some default content
+echo "Creating .env file with default content"
 cat <<EOF > .env
 # Add your environment variables here
 EOF
 
+# Create a default vscode workspace file with some recommended settings for development
+echo "Creating vscode workspace file with recommended settings for development"
+cat <<EOF > $project_name.code-workspace
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {}
+}
+EOF
+
+# Create a .vscode directory with some recommended settings for development
+echo "Creating .vscode directory with recommended settings for development"
+mkdir -p .vscode
+cat <<EOF > .vscode/launch.json
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python Debugger: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "main.py",
+            "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/.env"
+        }
+    ]
+}
+EOF
+
 # Create the new github repository and link it to the local git repository
 gh repo create "$GITHUB_ACCOUNT/$project_name" --"$repo_visibility" --source=. --remote=origin
+
+# Wait a few seconds to ensure the github repository is created before trying to push to it
+echo "Waiting for the GitHub repository to be created..."
+sleep 5
 
 # Push the initial commit to the new github repository
 git add .
