@@ -6,6 +6,12 @@ Starts, stops, or restarts the app service.
 =========================================================='
 
 PYPROJECT="pyproject.toml"
+SERVICE_FILE=""
+
+if [ "$(uname -s)" = "Darwin" ]; then
+	echo "Error: servicectrl.sh is not supported on macOS because it requires systemd." >&2
+	exit 1
+fi
 
 # Get the current version from pyproject.toml
 if [ -f "$PYPROJECT" ]; then
@@ -22,9 +28,66 @@ if [ -z "$SERVICE" ]; then
 	exit 1
 fi
 
+SERVICE_FILE="/etc/systemd/system/$SERVICE.service"
+UserID=${SUDO_USER:-$USER}
+
 usage() {
-	echo "Usage: $0 {start|stop|restart|reload|disable|enable|status|logs|help}"
+	echo "Usage: $0 {start|stop|restart|reload|disable|enable|status|logs|edit|help}"
 	exit 1
+}
+
+confirm_create_service_file() {
+	echo "Service file '$SERVICE_FILE' does not exist."
+	echo "A new file will be created with boilerplate content."
+	printf "Continue? [y/N]: "
+	read -r reply
+	case "$reply" in
+		y|Y|yes|YES|Yes)
+			return 0
+			;;
+		*)
+			echo "Aborted."
+			exit 1
+			;;
+	esac
+}
+
+create_service_file() {
+	sudo tee "$SERVICE_FILE" >/dev/null <<EOF
+[Unit]
+Description=$PROJECT_NAME service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=$(pwd)/launch.sh
+WorkingDirectory=$(pwd)
+User=$UserID
+Environment=PYTHONUNBUFFERED=1
+Environment=PATH=/home/$UserID/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+StandardOutput=journal
+StandardError=journal
+
+# Logging and restart behavior
+Restart=on-failure        # Only restart on non-zero exit code
+RestartSec=10             # Wait 10 seconds before restarting
+
+# Limit restart attempts (3 times in 60 seconds)
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+}
+
+edit_service_file() {
+	if [ ! -f "$SERVICE_FILE" ]; then
+		confirm_create_service_file
+		create_service_file
+	fi
+
+	sudo nano "$SERVICE_FILE"
 }
 
 help() {
@@ -41,6 +104,7 @@ help() {
 	echo "  enable   Enable the service to start at boot"
 	echo "  status   Show the current status of the service"
 	echo "  logs     Tail the live service logs (journalctl -f)"
+	echo "  edit     Edit the systemd service file"
 	echo "  help     Show this help message"
 	exit 0
 }
@@ -80,6 +144,9 @@ case "$1" in
 		;;
 	logs)
 		sudo journalctl -u "$SERVICE" -f
+		;;
+	edit)
+		edit_service_file
 		;;
 	*)
 		usage
