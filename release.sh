@@ -49,8 +49,8 @@ else
     PYTEST_NEEDED=false
 fi
 
-# Check if there is a docs/ folder to determine if pytest is needed
-if [ -d "docs" ]; then
+# Check if there is a mkdocs.yml file to determine if documentation build is needed
+if [ -f "mkdocs.yml" ]; then
     DOCS_NEEDED=true
     # Make sure mkdocs is in the path
     if ! command -v mkdocs &> /dev/null; then
