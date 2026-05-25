@@ -9,13 +9,17 @@ Stages, commits and pushes a new release of the project to git.
 
 PYPROJECT="pyproject.toml"
 
-# Get the current version from pyproject.toml
+# Get the current version from pyproject.toml, or hand off to nopy_release.sh
 if [ -f "$PYPROJECT" ]; then
     CURRENT_VERSION=$(grep -E '^version *= *"' "$PYPROJECT" | head -1 | sed -E 's/^version *= *"([^"]+)".*$/\1/')
     PROJECT_NAME=$(grep -E '^name *= *"' "$PYPROJECT" | head -1 | sed -E 's/^name *= *"([^"]+)".*$/\1/')
 else
-    echo "Error: $PYPROJECT not found."
-    exit 1
+    NOPY_SCRIPT="$(dirname "$0")/nopy_release.sh"
+    if [ ! -f "$NOPY_SCRIPT" ]; then
+        echo "Error: $PYPROJECT not found and $NOPY_SCRIPT is missing."
+        exit 1
+    fi
+    exec "$NOPY_SCRIPT" "$@"
 fi
 
 if [ -z "$CURRENT_VERSION" ]; then
