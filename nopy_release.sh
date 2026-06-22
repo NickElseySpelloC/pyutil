@@ -41,6 +41,7 @@ if [[ "$CONFIRM" != "Y" && "$CONFIRM" != "y" ]]; then
     exit 0
 fi
 
+
 # Stage all changes
 echo "Staging changes..."
 git add .
