@@ -107,16 +107,42 @@ REMOTE_DIR="${config_array[0]}"
 unset 'config_array[0]'
 PATTERNS=("${config_array[@]}")
 
-# Remove empty elements from patterns
-PATTERNS=( "${PATTERNS[@]}" )
-PATTERNS=( $(printf '%s\n' "${PATTERNS[@]}" | grep -v '^$') )
+# Remove empty elements from patterns (avoid word-splitting / globbing so
+# wildcard patterns stay literal and are expanded against the correct dir later)
+filtered=()
+for pattern in "${PATTERNS[@]}"; do
+    [[ -n "$pattern" ]] && filtered+=("$pattern")
+done
+PATTERNS=("${filtered[@]}")
 
 echo "Project directory: $PROJECT_DIR"
 echo "Remote directory:  $REMOTE_DIR"
-echo "Patterns:"
+
+# Source directory to resolve patterns against depends on the mode:
+# push reads from the project, pull reads from the remote.
+if [ "$MODE" = "push" ]; then
+    SOURCE_DIR="$PROJECT_DIR"
+else
+    SOURCE_DIR="$REMOTE_DIR"
+fi
+
+echo "Files to $MODE:"
+shopt -s nullglob
 for pattern in "${PATTERNS[@]}"; do
-    echo "  - $pattern"
+    if [[ "$pattern" == *"*"* ]]; then
+        matched=false
+        for item in "$SOURCE_DIR"/$pattern; do
+            echo "  - ${item#$SOURCE_DIR/}"
+            matched=true
+        done
+        [ "$matched" = false ] && warning "  ⚠ No match for pattern: $pattern"
+    elif [ -e "$SOURCE_DIR/$pattern" ]; then
+        echo "  - $pattern"
+    else
+        warning "  ⚠ Not found: $pattern"
+    fi
 done
+shopt -u nullglob
 echo ""
 
 # Show confirmation and ask for user input
