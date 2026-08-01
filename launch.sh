@@ -6,6 +6,7 @@ Requires Python and UV to be installed
 
 3/4/2026: Change default directory to the script location, and allow --homedir to override it.
 3/6/2026: Better logic for finding HomeDir.
+1/8/2026: Add support for 1Password op / build .env file
 =========================================================='
 
 # set -euo pipefail
@@ -46,11 +47,22 @@ cd "$HomeDir" || {
   exit 1
 }
 
+# Load the 1Password service account token explicitly — don't rely on shell rc files, since this script may run
+# outside an interactive/login shell (cron, @reboot, etc.)
+set -a
+source "$HOME/.config/op/service-account-token"
+set +a
+
+# Regenerate .env from the committed template if it exists
+EnvFile="$HomeDir/.env"
+if [ -f "$HomeDir/.env.template" ]; then
+  op inject -i "$HomeDir/.env.template" -o "$HomeDir/.env" -f
+fi
+
 # Load environment variables from .env if present (in HomeDir)
 # Note: this "sources" the file, so it should contain simple KEY=VALUE lines.
-EnvFile=".env"
 if [ -f "$EnvFile" ]; then
-  echo "[launcher] Loading environment from $HomeDir/$EnvFile ..."
+  echo "[launcher] Loading environment from $EnvFile ..."
   set -a
   # shellcheck disable=SC1090
   . "$EnvFile"
