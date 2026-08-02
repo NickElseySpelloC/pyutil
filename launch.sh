@@ -68,7 +68,11 @@ export PYTHONUNBUFFERED=1
 # launcher — uv sync, logging, etc. — not just the final app process, and no
 # plaintext .env is ever written to the filesystem.
 # -------------------------------------------------------------------------
-EnvTemplate="$HomeDir/.env.template"
+# .env.target is a per-deployment pointer (copy or symlink) to one of the tracked
+# templates, .env.dev.template or .env.prod.template. It is gitignored so each
+# checkout (dev vs prod) selects its own environment without shipping the choice
+# in git. The selected template carries APP_ENV, which is verified after injection.
+EnvTemplate="$HomeDir/.env.target"
 
 if [ -z "${_LAUNCH_OP_INJECTED:-}" ] && [ -f "$EnvTemplate" ]; then
   # Load the 1Password service-account token explicitly if present — don't rely
@@ -112,6 +116,18 @@ if [ -f "$EnvFile" ]; then
   # shellcheck disable=SC1090
   . "$EnvFile"
   set +a
+fi
+
+# Environment guard: APP_ENV is injected from the selected .env.target template
+# (development or production). Refuse to run if it is missing — that means no
+# template was resolved (.env.target absent or dangling); we must never run
+# without knowing which environment we're in.
+if [ -z "${APP_ENV:-}" ]; then
+  echo "[launcher] Error: APP_ENV is not set — refusing to run. Ensure .env.target points to .env.dev.template or .env.prod.template." >&2
+  exit 1
+fi
+if [ "$APP_ENV" = "development" ]; then
+  echo "[launcher] WARNING: APP_ENV=development — running with development settings." >&2
 fi
 
 # Get the script name from pyproject.toml
