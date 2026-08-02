@@ -85,6 +85,13 @@ if [ -z "${_LAUNCH_OP_INJECTED:-}" ] && [ -f "$EnvTemplate" ]; then
     # shellcheck disable=SC1090
     . "$HOME/.config/op/service-account-token"
     set +a
+    # With a service-account token, op authenticates directly to 1Password and
+    # never needs the desktop app. Disable biometric/app integration so op does
+    # NOT probe the 1Password desktop app's container — that access is what
+    # triggers the macOS "op would like to access data from other apps" TCC
+    # prompt on every run (the grant can't persist under a LaunchAgent). Scoped
+    # to this invocation, so interactive dev use of op elsewhere is unaffected.
+    export OP_BIOMETRIC_UNLOCK_ENABLED=false    
   fi
 
   if ! command -v op >/dev/null 2>&1; then
@@ -161,6 +168,20 @@ if [[ $(uname -m) == "armv7l" || $(uname -m) == "aarch64" ]]; then
   fi
 fi
 
+# If APP_CONFIG is set and --config hasn't been passed to this script, add it to the uv run command line. This allows systemd service files to set APP_CONFIG without needing to hardcode --config in the service file.
+if [ -n "${APP_CONFIG:-}" ]; then
+  config_passed=false
+  for arg in "$@"; do
+    if [[ "$arg" == "--config" ]]; then
+      config_passed=true
+      break
+    fi
+  done
+  if [ "$config_passed" = false ]; then
+    set -- "$@" "--config" "$APP_CONFIG"
+  fi
+fi
+
 # Make sure deps are synced before starting
 if ! "$UVCmd" sync; then
   echo "[launcher] uv sync failed — not starting app." >&2
@@ -174,7 +195,8 @@ term_handler() {
 }
 trap term_handler SIGINT SIGTERM
 
-echo "[launcher] Starting app with uv run $ScriptName from directory $HomeDir ..."
+echo "[launcher] Starting app with uv run $ScriptName from directory $HomeDir"
+echo "[launcher] Command line: $UVCmd run $ScriptName $*"
 "$UVCmd" run "$ScriptName" "$@"
 app_rc=$?
 
