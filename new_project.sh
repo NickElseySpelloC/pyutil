@@ -30,7 +30,7 @@ usage() {
     echo "  --public                   Make the GitHub repository public" >&2
     echo "  --private                  Make the GitHub repository private (default)" >&2
     echo "  --desc <description>       Project description (default: 'My Project')" >&2
-    exit 1
+    exit "${1:-1}"
 }
 
 # Return success (0) if rel_path matches one of EXCLUDE_PATTERNS, either as a whole or via any path segment
@@ -90,6 +90,14 @@ copy_template() {
     done < <(find "$src_dir" -mindepth 1 -print0)
 }
 
+# Handle --help/no-args before treating $1 as the project name
+if [[ $# -eq 0 ]]; then
+    usage
+fi
+if [[ "$1" == "--help" || "$1" == "-h" ]]; then
+    usage 0
+fi
+
 project="$1"
 shift || true
 template=basic
@@ -127,7 +135,7 @@ while [[ $# -gt 0 ]]; do
             repo_visibility="private"
             ;;
         --help|-h)
-            usage
+            usage 0
             ;;
         --desc)
             shift
