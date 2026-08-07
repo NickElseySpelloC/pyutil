@@ -13,7 +13,7 @@ Usage: gitrefresh.sh [options]
 
 Options (CLI overrides environment variables):
   --branch <name>               Branch to reset to (env: BRANCH, default: main)
-  --allow-dev-refresh           Allow refresh even if dev markers/patterns match (env: ALLOW_DEV_REFRESH=1)
+  --allow-dev-override          Allow refresh even if dev markers/patterns match (env: ALLOW_DEV_OVERRIDE=1)
   --block-markers <list>        Colon-separated list of marker files/dirs to block (env: BLOCK_MARKERS)
   --require-markers <list>      Colon-separated list; at least one must exist or abort (env: REQUIRE_MARKERS)
   --block-path-patterns <list>  Colon-separated substrings; if repo path contains any -> block (env: BLOCK_PATH_PATTERNS)
@@ -27,14 +27,14 @@ Examples:
   BRANCH=release -- yes:
     gitrefresh.sh --branch release --yes
   Using environment:
-    export ALLOW_DEV_REFRESH=1
+    export ALLOW_DEV_OVERRIDE=1
     gitrefresh.sh --block-markers ".dev_workspace:.development"
 EOF
 }
 
 # --- Safety & Portability Guards -------------------------------------------
 # Environment overrides:
-#   ALLOW_DEV_REFRESH=1
+#   ALLOW_DEV_OVERRIDE=1
 #   BLOCK_MARKERS=".dev_workspace:.development"
 #   REQUIRE_MARKERS=".deployment:.prod"
 #   BLOCK_PATH_PATTERNS="pattern1:pattern2"
@@ -52,9 +52,13 @@ BLOCK_MARKERS="${BLOCK_MARKERS:-$BLOCK_MARKERS_DEFAULT}"
 REQUIRE_MARKERS_DEFAULT=""
 REQUIRE_MARKERS="${REQUIRE_MARKERS:-$REQUIRE_MARKERS_DEFAULT}"
 STASH_BEFORE_REFRESH="${STASH_BEFORE_REFRESH:-1}"
-ALLOW_DEV_REFRESH="${ALLOW_DEV_REFRESH:-}"
+ALLOW_DEV_OVERRIDE="${ALLOW_DEV_OVERRIDE:-}"
 REQUIRE_REMOTE_HOST="${REQUIRE_REMOTE_HOST:-}"
 SERVICE_OVERRIDE=""
+DEV_CHECK_PREFIX="[Refresh]"
+
+# shellcheck source=git_dev_env_check.sh
+source "$(dirname "$0")/git_dev_env_check.sh"
 
 # Parse CLI args (override env/defaults)
 YES_MODE=0
@@ -72,8 +76,8 @@ while [[ $# -gt 0 ]]; do
       BRANCH="$2"
       shift 2
       ;;
-    --allow-dev-refresh)
-      ALLOW_DEV_REFRESH="1"
+    --allow-dev-override)
+      ALLOW_DEV_OVERRIDE="1"
       shift
       ;;
     --block-markers)
@@ -141,68 +145,9 @@ if [[ -z "$REPO_ROOT" ]]; then
   exit 3
 fi
 
-# 4. Block if any marker file exists unless override set
-IFS=":" read -r -a _markers <<<"$BLOCK_MARKERS"
-for m in "${_markers[@]}"; do
-  if [[ -n "$m" && -e "$REPO_ROOT/$m" ]]; then
-    if [[ "$ALLOW_DEV_REFRESH" != "1" ]]; then
-      echo "[Refresh] Refusing to run: dev marker '$m' found at repo root ($REPO_ROOT)." >&2
-      echo "Set ALLOW_DEV_REFRESH=1 or pass --allow-dev-refresh to override (not recommended)." >&2
-      exit 99
-    else
-      echo "[Refresh] ALLOW_DEV_REFRESH=1 set; ignoring dev marker '$m'." >&2
-    fi
-  fi
-done
-
-# 5. Block based on path pattern match (optional)
-if [[ -n "${BLOCK_PATH_PATTERNS:-}" ]]; then
-  IFS=":" read -r -a _block_paths <<<"$BLOCK_PATH_PATTERNS"
-  for p in "${_block_paths[@]}"; do
-    [[ -z "$p" ]] && continue
-    if [[ "$REPO_ROOT" == *"$p"* ]]; then
-      if [[ "$ALLOW_DEV_REFRESH" != "1" ]]; then
-        echo "[Refresh] Refusing to run: repo path '$REPO_ROOT' matches blocked pattern '$p'." >&2
-        exit 100
-      else
-        echo "[Refresh] ALLOW_DEV_REFRESH=1 set; ignoring blocked path pattern '$p'." >&2
-      fi
-    fi
-  done
-fi
-
-# 6. Require at least one deployment marker (if list provided)
-if [[ -n "$REQUIRE_MARKERS" ]]; then
-  IFS=":" read -r -a _req_markers <<<"$REQUIRE_MARKERS"
-  _found_req=0
-  for rm in "${_req_markers[@]}"; do
-    [[ -z "$rm" ]] && continue
-    if [[ -e "$REPO_ROOT/$rm" ]]; then
-      _found_req=1
-      break
-    fi
-  done
-  if [[ $_found_req -eq 0 ]]; then
-    if [[ "$ALLOW_DEV_REFRESH" != "1" ]]; then
-      echo "[Refresh] Refusing to run: none of the required markers ($REQUIRE_MARKERS) found at repo root ($REPO_ROOT)." >&2
-      echo "Create one of these files (e.g. 'touch .deployment') in deployment clones, or set ALLOW_DEV_REFRESH=1 or use --allow-dev-refresh to override." >&2
-      exit 101
-    else
-      echo "[Refresh] ALLOW_DEV_REFRESH=1 set; proceeding without required markers ($REQUIRE_MARKERS)." >&2
-    fi
-  fi
-fi
-
-# 7. Remote origin validation (optional)
-remote_url="$(git config --get remote.origin.url || true)"
-if [[ -z "$remote_url" ]]; then
-  echo "[Refresh] Error: No 'origin' remote configured." >&2
-  exit 4
-fi
-if [[ -n "$REQUIRE_REMOTE_HOST" && "$remote_url" != *"$REQUIRE_REMOTE_HOST"* ]]; then
-  echo "[Refresh] Error: origin remote ('$remote_url') does not match REQUIRED_REMOTE_HOST='$REQUIRE_REMOTE_HOST'." >&2
-  exit 5
-fi
+# 4-7. Dev-environment guard checks (shared with gitpush.sh)
+check_dev_environment
+remote_url="$REMOTE_URL"
 
 # 8. Find uv reliably (systemd often has a minimal PATH)
 if command -v uv >/dev/null 2>&1; then
