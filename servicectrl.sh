@@ -69,7 +69,7 @@ deploy_service() {
 	systemctl daemon-reexec
 	systemctl daemon-reload
 	systemctl enable "$SERVICE"
-	systemctl start "$SERVICE"
+	systemctl restart "$SERVICE"
 }
 
 help() {
