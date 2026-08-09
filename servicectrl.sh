@@ -41,7 +41,7 @@ SERVICE_FILE="/etc/systemd/system/$SERVICE.service"
 UserID=${SUDO_USER:-$USER}
 
 usage() {
-	echo "Usage: $0 {start|stop|restart|reload|disable|enable|status|logs|edit|help}"
+	echo "Usage: $0 {start|stop|restart|reload|disable|enable|status|is-active|logs|edit|help}"
 	echo "       $0 deploy <environment>"
 	exit 1
 }
@@ -87,6 +87,7 @@ help() {
 	echo "  disable 			  Disable the service from starting at boot"
 	echo "  enable  			  Enable the service to start at boot"
 	echo "  status  			  Show the current status of the service"
+	echo "  is-active			  Show whether the service is active (running)"
 	echo "  logs    			  Tail the live service logs (journalctl -f)"
 	echo "  help     			  Show this help message"
 	exit 0
@@ -128,6 +129,9 @@ case "$1" in
 		;;
 	status)
 		systemctl status "$SERVICE.service"
+		;;
+	is-active)
+		systemctl is-active "$SERVICE"
 		;;
 	logs)
 		journalctl -u "$SERVICE" -f
