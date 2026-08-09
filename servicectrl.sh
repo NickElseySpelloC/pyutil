@@ -8,10 +8,19 @@ Starts, stops, or restarts the app service.
 PYPROJECT="pyproject.toml"
 SERVICE_FILE=""
 
+# Basic sanity checks 
 if [ "$(uname -s)" = "Darwin" ]; then
 	echo "Error: servicectrl.sh is not supported on macOS because it requires systemd." >&2
 	exit 1
 fi
+
+if [ "$(id -u)" -ne 0 ]; then
+	echo "Error: this script requires root privileges. Please run with sudo." >&2
+	exit 1
+fi
+
+# Get the current working directory
+CURRENT_DIR=$(pwd)
 
 # Get the current version from pyproject.toml
 if [ -f "$PYPROJECT" ]; then
@@ -33,61 +42,34 @@ UserID=${SUDO_USER:-$USER}
 
 usage() {
 	echo "Usage: $0 {start|stop|restart|reload|disable|enable|status|logs|edit|help}"
+	echo "       $0 deploy <environment>"
 	exit 1
-}
-
-confirm_create_service_file() {
-	echo "Service file '$SERVICE_FILE' does not exist."
-	echo "A new file will be created with boilerplate content."
-	printf "Continue? [y/N]: "
-	read -r reply
-	case "$reply" in
-		y|Y|yes|YES|Yes)
-			return 0
-			;;
-		*)
-			echo "Aborted."
-			exit 1
-			;;
-	esac
-}
-
-create_service_file() {
-	sudo tee "$SERVICE_FILE" >/dev/null <<EOF
-[Unit]
-Description=$PROJECT_NAME service
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=$(pwd)/launch.sh
-WorkingDirectory=$(pwd)
-User=$UserID
-Environment=PYTHONUNBUFFERED=1
-Environment=PATH=/home/$UserID/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-StandardOutput=journal
-StandardError=journal
-
-# Logging and restart behavior
-Restart=on-failure        # Only restart on non-zero exit code
-RestartSec=10             # Wait 10 seconds before restarting
-
-# Limit restart attempts (3 times in 60 seconds)
-StartLimitIntervalSec=60
-StartLimitBurst=3
-
-[Install]
-WantedBy=multi-user.target
-EOF
 }
 
 edit_service_file() {
 	if [ ! -f "$SERVICE_FILE" ]; then
-		confirm_create_service_file
-		create_service_file
+		echo "Service file '$SERVICE_FILE' does not exist."
+		echo "Use the deploy command to create it, or edit it manually."
 	fi
 
-	sudo nano "$SERVICE_FILE"
+	nano "$SERVICE_FILE"
+}
+
+deploy_service() {
+	environment="$1"
+	template="$CURRENT_DIR/deploy/$environment/$PROJECT_NAME.service"
+
+	if [ ! -f "$template" ]; then
+		echo "Error: service template '$template' not found." >&2
+		exit 1
+	fi
+
+	echo "Deploying service '$SERVICE' from '$template' to '$SERVICE_FILE', then reloading, enabling, and starting it."
+	cp "$template" "$SERVICE_FILE"
+	systemctl daemon-reexec
+	systemctl daemon-reload
+	systemctl enable "$SERVICE"
+	systemctl start "$SERVICE"
 }
 
 help() {
@@ -96,20 +78,25 @@ help() {
 	echo "Usage: $0 <command>"
 	echo ""
 	echo "Commands:"
-	echo "  start    Start the service"
-	echo "  stop     Stop the service"
-	echo "  restart  Stop then start the service"
-	echo "  reload   Reload the systemd daemon configuration (daemon-reexec + daemon-reload)"
-	echo "  disable  Disable the service from starting at boot"
-	echo "  enable   Enable the service to start at boot"
-	echo "  status   Show the current status of the service"
-	echo "  logs     Tail the live service logs (journalctl -f)"
-	echo "  edit     Edit the systemd service file"
-	echo "  help     Show this help message"
+	echo "  edit     			  Create or edit the systemd service file"
+	echo "  deploy <environment>  Deploy the service (create service file, enable, and start) using the specified environment template (e.g., sydneyapp)"
+	echo "  start    			  Start the service"
+	echo "  stop    			  Stop the service"
+	echo "  restart 			  Stop then start the service"
+	echo "  reload  			  Reload the systemd daemon configuration (daemon-reexec + daemon-reload)"
+	echo "  disable 			  Disable the service from starting at boot"
+	echo "  enable  			  Enable the service to start at boot"
+	echo "  status  			  Show the current status of the service"
+	echo "  logs    			  Tail the live service logs (journalctl -f)"
+	echo "  help     			  Show this help message"
 	exit 0
 }
 
-if [ $# -ne 1 ]; then
+if [ "$1" = "deploy" ]; then
+	if [ $# -ne 2 ]; then
+		usage
+	fi
+elif [ $# -ne 1 ]; then
 	usage
 fi
 
@@ -120,33 +107,36 @@ fi
 echo "Managing service '$SERVICE' for project '$PROJECT_NAME' (v$CURRENT_VERSION) - action: $1"
 case "$1" in
 	start)
-		sudo systemctl start "$SERVICE"
+		systemctl start "$SERVICE"
 		;;
 	stop)
-		sudo systemctl stop "$SERVICE"
+		systemctl stop "$SERVICE"
 		;;
 	restart)
-		sudo systemctl stop "$SERVICE"
-		sudo systemctl start "$SERVICE"
+		systemctl stop "$SERVICE"
+		systemctl start "$SERVICE"
 		;;
 	reload)
-		sudo systemctl daemon-reexec
-		sudo systemctl daemon-reload
+		systemctl daemon-reexec
+		systemctl daemon-reload
 		;;
 	disable)
-		sudo systemctl disable "$SERVICE"
+		systemctl disable "$SERVICE"
 		;;
 	enable)
-		sudo systemctl enable "$SERVICE"
+		systemctl enable "$SERVICE"
 		;;
 	status)
-		sudo systemctl status "$SERVICE.service"
+		systemctl status "$SERVICE.service"
 		;;
 	logs)
-		sudo journalctl -u "$SERVICE" -f
+		journalctl -u "$SERVICE" -f
 		;;
 	edit)
 		edit_service_file
+		;;
+	deploy)
+		deploy_service "$2"
 		;;
 	*)
 		usage
