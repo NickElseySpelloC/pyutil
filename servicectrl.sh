@@ -57,7 +57,7 @@ edit_service_file() {
 
 deploy_service() {
 	environment="$1"
-	template="$CURRENT_DIR/deploy/$environment/$PROJECT_NAME.service"
+	template="$CURRENT_DIR/deploy/$environment/$SERVICE.service"
 
 	if [ ! -f "$template" ]; then
 		echo "Error: service template '$template' not found." >&2
