@@ -108,6 +108,19 @@ if [ -z "${_LAUNCH_OP_INJECTED:-}" ] && [ -f "$EnvTemplate" ]; then
     rm -f "$HomeDir/.env"
   fi
 
+  # Wait for DNS/network to be ready before op touches the network — guards
+  # against the post-wake race where mDNSResponder hasn't re-established
+  # upstream DNS yet (fails as "no such host" ~1s into a wake).
+  op_host="my.1password.com"
+  for attempt in $(seq 1 6); do
+    if dscacheutil -q host -a name "$op_host" >/dev/null 2>&1 \
+      || nslookup "$op_host" >/dev/null 2>&1; then
+      break
+    fi
+    echo "[workflow] Network/DNS not ready (attempt $attempt), waiting 5s ..."
+    sleep 5
+  done  
+
   echo "[launcher] Injecting secrets from $EnvTemplate via 'op run' and re-exec'ing ..."
   export _LAUNCH_OP_INJECTED=1
   exec op run --env-file="$EnvTemplate" -- "$SelfPath" "$@"
