@@ -223,6 +223,18 @@ copy_template "$TEMPLATE_FOLDER" "$BASE_DIR/$project"
 # Do a uv sync to ensure the uv.lock file is up to date with the new dependencies and the virtual environment is set up correctly
 uv sync --extra all
 
+# Make all the shell scripts in the scripts directory executable
+if [[ -d "scripts" ]]; then
+    echo "Making shell scripts in the scripts directory executable"
+    find scripts -type f -name "*.sh" -exec chmod +x {} \;
+fi
+
+# Create the .env.target symbolic link to the .env file in the project root if it doesn't already exist
+if [[ ! -L ".env.target" ]]; then
+    echo "Creating .env.target symbolic link file"
+    ln -s .env.dev.template .env.target
+fi
+
 # Push the initial commit to the new github repository
 git add .
 git commit -m "Initial commit"

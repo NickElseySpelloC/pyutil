@@ -5,10 +5,9 @@ build/
 dist/
 wheels/
 *.egg-info
-.DS_Store
+**/.DS_Store
 
 
 # Virtual environments
 .venv
 .vscode/launch.json
-.DS_Store

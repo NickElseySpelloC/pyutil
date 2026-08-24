@@ -27,17 +27,24 @@ Options:
   -n, --no-fetch    Don't run 'git fetch'. Compare against already-fetched
                     remote-tracking refs only (no network access). Faster, but
                     remote results may be stale.
+  -l, --local-only  Only check for local uncommitted changes (pending
+                    commits). Skips remote comparison entirely (no fetch).
   -h, --help        Show this help and exit.
 EOF
 }
 
 DO_FETCH=1
+LOCAL_ONLY=0
 DEV_ROOT=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -n|--no-fetch)
       DO_FETCH=0
+      shift
+      ;;
+    -l|--local-only)
+      LOCAL_ONLY=1
       shift
       ;;
     -h|--help)
@@ -123,28 +130,35 @@ while IFS= read -r -d '' dir; do
   # --- Remote changes (ahead of local) ---
   remote_changes=""
   remote_note=""
-  # Does this repo track an upstream branch?
-  upstream="$(git -C "$dir" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null)"
-  if [[ -n "$upstream" ]]; then
-    remote_name="${upstream%%/*}"
-    fetch_ok=1
-    if [[ $DO_FETCH -eq 1 ]]; then
-      # Refresh remote tracking refs so the comparison is current.
-      # Only fetch the remote backing this branch.
-      if ! git -C "$dir" fetch --quiet "$remote_name" 2>/dev/null; then
-        fetch_ok=0
-        remote_note="(could not reach remote '$remote_name')"
+  upstream=""
+  if [[ $LOCAL_ONLY -eq 0 ]]; then
+    # Does this repo track an upstream branch?
+    upstream="$(git -C "$dir" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null)"
+    if [[ -n "$upstream" ]]; then
+      remote_name="${upstream%%/*}"
+      fetch_ok=1
+      if [[ $DO_FETCH -eq 1 ]]; then
+        # Refresh remote tracking refs so the comparison is current.
+        # Only fetch the remote backing this branch.
+        if ! git -C "$dir" fetch --quiet "$remote_name" 2>/dev/null; then
+          fetch_ok=0
+          remote_note="(could not reach remote '$remote_name')"
+        fi
       fi
-    fi
-    if [[ $fetch_ok -eq 1 ]]; then
-      # Files present on the upstream branch but not yet in local HEAD.
-      # status letters: M=modified, A=added, D=deleted, etc.
-      remote_changes="$(git -C "$dir" diff --name-status HEAD.."@{upstream}" 2>/dev/null)"
+      if [[ $fetch_ok -eq 1 ]]; then
+        # Files present on the upstream branch but not yet in local HEAD.
+        # status letters: M=modified, A=added, D=deleted, etc.
+        remote_changes="$(git -C "$dir" diff --name-status HEAD.."@{upstream}" 2>/dev/null)"
+      fi
     fi
   fi
 
   # Skip repos with nothing to report
-  if [[ -z "$local_changes" && -z "$remote_changes" && -z "$remote_note" ]]; then
+  if [[ $LOCAL_ONLY -eq 1 ]]; then
+    if [[ -z "$local_changes" ]]; then
+      continue
+    fi
+  elif [[ -z "$local_changes" && -z "$remote_changes" && -z "$remote_note" ]]; then
     continue
   fi
 
@@ -159,23 +173,27 @@ while IFS= read -r -d '' dir; do
     echo "    (none)"
   fi
 
-  echo "  Remote changes (need git pull):"
-  if [[ -n "$remote_changes" ]]; then
-    echo "$remote_changes" | format_changes
-  elif [[ -n "$remote_note" ]]; then
-    echo "    $remote_note"
-  elif [[ -z "$upstream" ]]; then
-    echo "    (no upstream tracking branch)"
-  else
-    echo "    (up to date)"
+  if [[ $LOCAL_ONLY -eq 0 ]]; then
+    echo "  Remote changes (need git pull):"
+    if [[ -n "$remote_changes" ]]; then
+      echo "$remote_changes" | format_changes
+    elif [[ -n "$remote_note" ]]; then
+      echo "    $remote_note"
+    elif [[ -z "$upstream" ]]; then
+      echo "    (no upstream tracking branch)"
+    else
+      echo "    (up to date)"
+    fi
   fi
 
   echo
-done < <(find "$DEV_ROOT" -mindepth 1 -maxdepth 1 -type d -print0)
+done < <(find "$DEV_ROOT" -mindepth 1 -maxdepth 1 -type d -print0 | sort -z)
 
 # Echo status code legend if any repo had changes
 if [[ $had_changes -eq 1 ]]; then
   echo "Status codes: M=modified, A=added, D=deleted, R=renamed, C=copied, ??=untracked, !!=ignored"
+elif [[ $LOCAL_ONLY -eq 1 ]]; then
+  echo "No local changes found in any Git repositories under '$DEV_ROOT'."
 else
   echo "No local or remote changes found in any Git repositories under '$DEV_ROOT'."
 fi
